@@ -18,11 +18,6 @@ struct MapData {
     unsigned int value;
 };
 
-struct Config {
-  __u16 host_port;
-  __u64 host_pid;
-};
-
 // The bpf syscall has 3 arguments:
 //  1. cmd:   The command/action to take (get a map handle, load a program, etc.)
 //  2. uattr: A union of structs that hold the arguments for the action

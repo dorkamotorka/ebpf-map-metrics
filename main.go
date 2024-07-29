@@ -1,6 +1,6 @@
 package main
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target amd64 -type Config sync sync.c
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target amd64 sync sync.c
 
 import (
 	"log"
@@ -39,6 +39,23 @@ func main() {
 		log.Fatalf("opening htab_map_delete_elem kprobe: %s", err)
 	}
 	defer fDelete.Close()
+
+        aUpdate, err := link.AttachTracing(link.TracingOptions{
+                Program: syncObjs.syncPrograms.BpfProgKernArraymapupdate,
+        })
+        if err != nil {
+                log.Fatalf("opening array_map_update_elem kprobe: %s", err)
+        }
+        defer aUpdate.Close()
+
+        aDelete, err := link.AttachTracing(link.TracingOptions{
+                Program: syncObjs.syncPrograms.BpfProgKernArraymapdelete,
+        })
+        if err != nil {
+                log.Fatalf("opening array_map_delete_elem kprobe: %s", err)
+        }
+        defer aDelete.Close()
+
 
 	rd, err := ringbuf.NewReader(syncObjs.MapEvents)
 	if err != nil {

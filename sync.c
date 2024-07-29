@@ -8,11 +8,11 @@
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
-  int (*type)[BPF_MAP_TYPE_ARRAY];
-  int (*max_entries)[1];
-  __u32 *key;
-  struct Config *value;
-} map_config SEC(".maps");
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __type(key, int);
+    __type(value, int);
+    __uint(max_entries, 10240);
+} array_map SEC(".maps");
 
 /* BPF ringbuf map */
 struct {
@@ -32,12 +32,6 @@ struct {
 static void __always_inline
 log_map_update(struct bpf_map* updated_map, unsigned int *pKey, unsigned int *pValue, enum map_updater update_type)
 { 
-  // This prevents the proxy from proxying itself
-  __u32 key = 0;
-  struct Config *conf = bpf_map_lookup_elem(&map_config, &key);
-  if (!conf) return;
-  if ((bpf_get_current_pid_tgid() >> 32) == conf->host_pid) return;
-
   // Get basic info about the map
   uint32_t map_id = MEM_READ(updated_map->id);
   uint32_t key_size = MEM_READ(updated_map->key_size);
@@ -65,17 +59,56 @@ log_map_update(struct bpf_map* updated_map, unsigned int *pKey, unsigned int *pV
   bpf_ringbuf_submit(out_data, 0);
 }
 
-SEC("fentry/htab_map_update_elem")
-int BPF_PROG(bpf_prog_kern_hmapupdate, struct bpf_map *map, void *key, void *value, u64 map_flags) {
-  bpf_printk("htab_map_update_elem\n");
+// We use fexit instead of fentry, because ret also tells us whether the operation was actually successful or not
+// Unsuccessful operation is e.g. deleting a key that doesn't exists 
+
+SEC("fexit/htab_map_update_elem")
+int BPF_PROG(bpf_prog_kern_hmapupdate, struct bpf_map *map, void *key, void *value, u64 map_flags, long ret) {
+  bpf_printk("htab_map_update_elem: %d\n", ret);
+
+  if (ret != 0) {
+    bpf_printk("Hash table wasn't updated");
+    return 0;
+  }
 
   log_map_update(map, key, value, MAP_UPDATE);
   return 0;
 }
 
-SEC("fentry/htab_map_delete_elem")
-int BPF_PROG(bpf_prog_kern_hmapdelete, struct bpf_map *map, void *key) {
-  bpf_printk("htab_map_delete_elem\n");
+SEC("fexit/htab_map_delete_elem")
+int BPF_PROG(bpf_prog_kern_hmapdelete, struct bpf_map *map, void *key, long ret) {
+  bpf_printk("htab_map_delete_elem: %d\n", ret);
+
+  if (ret != 0) {
+    bpf_printk("Hash table wasn't updated");
+    return 0;
+  }
+
+  log_map_update(map, key, 0, MAP_DELETE);
+  return 0;
+}
+
+SEC("fexit/array_map_update_elem")
+int BPF_PROG(bpf_prog_kern_arraymapupdate, struct bpf_map *map, void *key, void *value, u64 map_flags, long ret) {
+  bpf_printk("array_map_update_elem: %d\n", ret);
+
+  if (ret != 0) {
+    bpf_printk("Array wasn't updated");
+    return 0;
+  }
+
+  log_map_update(map, key, value, MAP_UPDATE);
+  return 0;
+}
+
+SEC("fexit/array_map_delete_elem")
+int BPF_PROG(bpf_prog_kern_arraymapdelete, struct bpf_map *map, void *key, long ret) {
+  bpf_printk("array_map_delete_elem: %d\n", ret);
+
+  if (ret != 0) {
+    bpf_printk("Array wasn't updated");
+    return 0;
+  }
 
   log_map_update(map, key, 0, MAP_DELETE);
   return 0;
