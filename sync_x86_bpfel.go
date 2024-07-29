@@ -12,12 +12,6 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type syncConfig struct {
-	HostPort uint16
-	_        [6]byte
-	HostPid  uint64
-}
-
 // loadSync returns the embedded CollectionSpec for sync.
 func loadSync() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_SyncBytes)
@@ -59,16 +53,18 @@ type syncSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type syncProgramSpecs struct {
-	BpfProgKernHmapdelete *ebpf.ProgramSpec `ebpf:"bpf_prog_kern_hmapdelete"`
-	BpfProgKernHmapupdate *ebpf.ProgramSpec `ebpf:"bpf_prog_kern_hmapupdate"`
+	BpfProgKernArraymapdelete *ebpf.ProgramSpec `ebpf:"bpf_prog_kern_arraymapdelete"`
+	BpfProgKernArraymapupdate *ebpf.ProgramSpec `ebpf:"bpf_prog_kern_arraymapupdate"`
+	BpfProgKernHmapdelete     *ebpf.ProgramSpec `ebpf:"bpf_prog_kern_hmapdelete"`
+	BpfProgKernHmapupdate     *ebpf.ProgramSpec `ebpf:"bpf_prog_kern_hmapupdate"`
 }
 
 // syncMapSpecs contains maps before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type syncMapSpecs struct {
+	ArrayMap  *ebpf.MapSpec `ebpf:"array_map"`
 	HashMap   *ebpf.MapSpec `ebpf:"hash_map"`
-	MapConfig *ebpf.MapSpec `ebpf:"map_config"`
 	MapEvents *ebpf.MapSpec `ebpf:"map_events"`
 }
 
@@ -91,15 +87,15 @@ func (o *syncObjects) Close() error {
 //
 // It can be passed to loadSyncObjects or ebpf.CollectionSpec.LoadAndAssign.
 type syncMaps struct {
+	ArrayMap  *ebpf.Map `ebpf:"array_map"`
 	HashMap   *ebpf.Map `ebpf:"hash_map"`
-	MapConfig *ebpf.Map `ebpf:"map_config"`
 	MapEvents *ebpf.Map `ebpf:"map_events"`
 }
 
 func (m *syncMaps) Close() error {
 	return _SyncClose(
+		m.ArrayMap,
 		m.HashMap,
-		m.MapConfig,
 		m.MapEvents,
 	)
 }
@@ -108,12 +104,16 @@ func (m *syncMaps) Close() error {
 //
 // It can be passed to loadSyncObjects or ebpf.CollectionSpec.LoadAndAssign.
 type syncPrograms struct {
-	BpfProgKernHmapdelete *ebpf.Program `ebpf:"bpf_prog_kern_hmapdelete"`
-	BpfProgKernHmapupdate *ebpf.Program `ebpf:"bpf_prog_kern_hmapupdate"`
+	BpfProgKernArraymapdelete *ebpf.Program `ebpf:"bpf_prog_kern_arraymapdelete"`
+	BpfProgKernArraymapupdate *ebpf.Program `ebpf:"bpf_prog_kern_arraymapupdate"`
+	BpfProgKernHmapdelete     *ebpf.Program `ebpf:"bpf_prog_kern_hmapdelete"`
+	BpfProgKernHmapupdate     *ebpf.Program `ebpf:"bpf_prog_kern_hmapupdate"`
 }
 
 func (p *syncPrograms) Close() error {
 	return _SyncClose(
+		p.BpfProgKernArraymapdelete,
+		p.BpfProgKernArraymapupdate,
 		p.BpfProgKernHmapdelete,
 		p.BpfProgKernHmapupdate,
 	)
