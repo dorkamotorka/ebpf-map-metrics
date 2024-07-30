@@ -3,8 +3,8 @@ package main
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target amd64 sync sync.c
 
 import (
-	"fmt"
 	"log"
+	"fmt"
 	"net/http"
 	"unsafe"
 
@@ -21,9 +21,9 @@ var (
     mapItemCountGauge = prometheus.NewGaugeVec(
         prometheus.GaugeOpts{
             Name: "ebpf_map_item_count",
-            Help: "Current number of items in eBPF maps, labeled by map ID",
+            Help: "Current number of items in eBPF maps, labeled by map name",
         },
-        []string{"map_id"},
+        []string{"map_name"},
     )
 )
 
@@ -134,28 +134,28 @@ func main() {
 		log.Printf("Value Size: %d", Event.ValueSize)
 		log.Printf("===========================================")
 
-                // Convert map ID to string for use as a label
-        	mapIDStr := fmt.Sprintf("%d", Event.MapID)
+		mapName := fmt.Sprintf("%s", string(Event.Name[:]))
 
         	// Update Prometheus metrics based on event type
         	switch Event.UpdateType.String() {
         	case "UPDATE":
-			if !isInArray(eBPFMaps[mapIDStr], Event.Key) {
-				eBPFMaps[mapIDStr] = append(eBPFMaps[mapIDStr], Event.Key)
-            			mapItemCountGauge.WithLabelValues(mapIDStr).Inc()
+			if !isInArray(eBPFMaps[mapName], Event.Key) {
+				eBPFMaps[mapName] = append(eBPFMaps[mapName], Event.Key)
+            			mapItemCountGauge.WithLabelValues(mapName).Inc()
 			} else {
-				log.Println("Element %d already present in the map", Event.Key)
+				log.Printf("Element %d already present in the %s map", Event.Key, mapName)
 				continue
 			}
         	case "DELETE":
-			for i, v := range eBPFMaps[mapIDStr] {
+			for i, v := range eBPFMaps[mapName] {
         			if v == Event.Key {
-            				eBPFMaps[mapIDStr] = append(eBPFMaps[mapIDStr][:i], eBPFMaps[mapIDStr][i+1:]...)
-            				mapItemCountGauge.WithLabelValues(mapIDStr).Dec()
+					// Removes the i-th element from the array
+            				eBPFMaps[mapName] = append(eBPFMaps[mapName][:i], eBPFMaps[mapName][i+1:]...)
+            				mapItemCountGauge.WithLabelValues(mapName).Dec()
 					continue
         			}
     			}
-			log.Println("Element %d not present in the map", Event.Key)
+			log.Printf("Element %d not present in the %s map", Event.Key, mapName)
         	}
 	}
 }
