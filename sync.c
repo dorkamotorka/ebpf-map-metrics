@@ -16,8 +16,8 @@ struct {
 
 /* BPF ringbuf map */
 struct {
-	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, 256 * 1024 /* 256 KB */);
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 256 * 1024 /* 256 KB */);
 } map_events SEC(".maps");
 
 struct {
@@ -26,6 +26,13 @@ struct {
     __type(value, int);
     __uint(max_entries, 10240);
 } hash_map SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, 32);
+    __type(key, int);
+    __type(value, int);
+} lru_hash_map SEC(".maps");
 
 #define MEM_READ(P) ({typeof(P) val = 0; bpf_probe_read(&val, sizeof(val), &P); val;})
 
@@ -81,6 +88,32 @@ int BPF_PROG(bpf_prog_kern_hmapdelete, struct bpf_map *map, void *key, long ret)
 
   if (ret != 0) {
     bpf_printk("Hash table wasn't updated");
+    return 0;
+  }
+
+  log_map_update(map, key, 0, MAP_DELETE);
+  return 0;
+}
+
+SEC("fexit/htab_lru_map_update_elem")
+int BPF_PROG(bpf_prog_kern_lruhmapupdate, struct bpf_map *map, void *key, void *value, u64 map_flags, long ret) {
+  bpf_printk("htab_lru_map_update_elem: %d\n", ret);
+
+  if (ret != 0) {
+    bpf_printk("LRU Hash table wasn't updated");
+    return 0;
+  }
+
+  log_map_update(map, key, value, MAP_UPDATE);
+  return 0;
+}
+
+SEC("fexit/htab_lru_map_delete_elem")
+int BPF_PROG(bpf_prog_kern_lruhmapdelete, struct bpf_map *map, void *key, long ret) {
+  bpf_printk("htab_lru_map_delete_elem: %d\n", ret);
+
+  if (ret != 0) {
+    bpf_printk("LRU Hash table wasn't updated");
     return 0;
   }
 
