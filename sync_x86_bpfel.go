@@ -65,10 +65,7 @@ type syncProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type syncMapSpecs struct {
-	ArrayMap   *ebpf.MapSpec `ebpf:"array_map"`
-	HashMap    *ebpf.MapSpec `ebpf:"hash_map"`
-	LruHashMap *ebpf.MapSpec `ebpf:"lru_hash_map"`
-	MapEvents  *ebpf.MapSpec `ebpf:"map_events"`
+	MapEvents *ebpf.MapSpec `ebpf:"map_events"`
 }
 
 // syncObjects contains all objects after they have been loaded into the kernel.
@@ -90,17 +87,11 @@ func (o *syncObjects) Close() error {
 //
 // It can be passed to loadSyncObjects or ebpf.CollectionSpec.LoadAndAssign.
 type syncMaps struct {
-	ArrayMap   *ebpf.Map `ebpf:"array_map"`
-	HashMap    *ebpf.Map `ebpf:"hash_map"`
-	LruHashMap *ebpf.Map `ebpf:"lru_hash_map"`
-	MapEvents  *ebpf.Map `ebpf:"map_events"`
+	MapEvents *ebpf.Map `ebpf:"map_events"`
 }
 
 func (m *syncMaps) Close() error {
 	return _SyncClose(
-		m.ArrayMap,
-		m.HashMap,
-		m.LruHashMap,
 		m.MapEvents,
 	)
 }
