@@ -1,6 +1,14 @@
 # ebpf-map-metrics
 
-Run the program using:
+## Development Status
+
+This project is currently under development.
+
+**Note:** The tool only counts elements in the array that were added or removed *after* the program starts running. We are actively exploring solutions to improve this functionality.
+
+## How to Run
+
+To run the program, follow these steps:
 
 ```
 go generate
