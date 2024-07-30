@@ -27,6 +27,17 @@ var (
     )
 )
 
+// Function to check if an element is in an array
+func isInArray(arr []uint32, elem uint32) bool {
+    for _, v := range arr {
+        if v == elem {
+            return true
+        }
+    }
+    return false
+}
+
+
 func main() {
         reg := prometheus.NewRegistry()
     	reg.MustRegister(mapItemCountGauge)
@@ -105,6 +116,7 @@ func main() {
 	}
 	defer rd.Close()
 
+	eBPFMaps := make(map[string][]uint32)
 	for {
 		record, err := rd.Read()
 		if err != nil {
@@ -128,9 +140,22 @@ func main() {
         	// Update Prometheus metrics based on event type
         	switch Event.UpdateType.String() {
         	case "UPDATE":
-            		mapItemCountGauge.WithLabelValues(mapIDStr).Inc()
+			if !isInArray(eBPFMaps[mapIDStr], Event.Key) {
+				eBPFMaps[mapIDStr] = append(eBPFMaps[mapIDStr], Event.Key)
+            			mapItemCountGauge.WithLabelValues(mapIDStr).Inc()
+			} else {
+				log.Println("Element %d already present in the map", Event.Key)
+				continue
+			}
         	case "DELETE":
-            		mapItemCountGauge.WithLabelValues(mapIDStr).Dec()
+			for i, v := range eBPFMaps[mapIDStr] {
+        			if v == Event.Key {
+            				eBPFMaps[mapIDStr] = append(eBPFMaps[mapIDStr][:i], eBPFMaps[mapIDStr][i+1:]...)
+            				mapItemCountGauge.WithLabelValues(mapIDStr).Dec()
+					continue
+        			}
+    			}
+			log.Println("Element %d not present in the map", Event.Key)
         	}
 	}
 }
