@@ -1,0 +1,4 @@
+# HELP ebpf_map_item_count Current number of items in eBPF maps, labeled by map name
+# TYPE ebpf_map_item_count gauge
+ebpf_map_item_count{map_name="array_map"} 2
+ebpf_map_item_count{map_name="lru_hash_map"} 2

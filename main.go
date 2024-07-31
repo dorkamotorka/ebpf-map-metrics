@@ -4,9 +4,15 @@ package main
 
 import (
 	"log"
+	"fmt"
 	"net/http"
 	"unsafe"
+	"os"
+    	"path/filepath"
+	"bytes"
+	"encoding/gob"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
