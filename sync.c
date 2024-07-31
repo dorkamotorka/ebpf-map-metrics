@@ -12,6 +12,7 @@ struct {
     __type(key, int);
     __type(value, int);
     __uint(max_entries, 10240);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } array_map SEC(".maps");
 
 /* BPF ringbuf map */
@@ -25,8 +26,10 @@ struct {
     __type(key, int);
     __type(value, int);
     __uint(max_entries, 10240);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } hash_map SEC(".maps");
 
+// NOTE: Intentionally not pinned to simulate metric going back to zero after restart
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, 32);

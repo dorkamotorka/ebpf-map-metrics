@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"unsafe"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
@@ -27,14 +28,28 @@ var (
     )
 )
 
-// Function to check if an element is in an array
-func isInArray(arr []uint32, elem uint32) bool {
-    for _, v := range arr {
-        if v == elem {
-            return true
-        }
+func getMapKeys(m *ebpf.Map) ([][]byte, error) {
+    var keys [][]byte
+    info, err := m.Info(); if err != nil {
+	return nil, err
     }
-    return false
+
+    keySize := int(info.KeySize)
+    valueSize := int(info.ValueSize)
+
+    key := make([]byte, keySize)
+    value := make([]byte, valueSize)
+    it := m.Iterate()
+    for it.Next(&key, &value) {
+	// append key if value non-zero
+	//
+	if isNonZero(value) {
+		keys = append(keys, append([]byte(nil), key...))
+		mapItemCountGauge.WithLabelValues(info.Name).Inc()
+	}
+    }  
+
+    return keys, nil
 }
 
 
@@ -56,7 +71,7 @@ func main() {
 
 	// Load pre-compiled programs and maps into the kernel.
 	syncObjs := syncObjects{}
-	if err := loadSyncObjects(&syncObjs, nil); err != nil {
+	if err := loadSyncObjects(&syncObjs, &ebpf.CollectionOptions{Maps: ebpf.MapOptions{PinPath: "/sys/fs/bpf/test/maps"}}); err != nil {
 		log.Fatal(err)
 	}
 	defer syncObjs.Close()
@@ -109,6 +124,31 @@ func main() {
         }
         defer arrayDelete.Close()
 
+	// Append all maps we track into the array so we can loop through it
+	var maps []*ebpf.Map
+	maps = append(maps, syncObjs.syncMaps.ArrayMap, syncObjs.syncMaps.HashMap, syncObjs.syncMaps.LruHashMap)
+
+	mapsKeys := make(map[string][][]byte)
+	for _, m := range maps {
+		info, err := m.Info()
+		if err != nil {
+		    log.Fatalf("Failed to get map info: %v", err)
+		}
+
+		mapName := info.Name
+		keys, err := getMapKeys(m)
+		if err != nil {
+		    log.Fatalf("Failed to get keys for map %s: %v", mapName, err)
+		}
+
+		mapsKeys[mapName] = keys
+	}
+
+	// Print the keys for each map for debugging
+	for name, keys := range mapsKeys {
+		fmt.Printf("Map %s has keys: %v\n", name, keys)
+	}
+
 
 	rd, err := ringbuf.NewReader(syncObjs.MapEvents)
 	if err != nil {
@@ -116,7 +156,6 @@ func main() {
 	}
 	defer rd.Close()
 
-	eBPFMaps := make(map[string][]uint32)
 	for {
 		record, err := rd.Read()
 		if err != nil {
@@ -134,28 +173,33 @@ func main() {
 		log.Printf("Value Size: %d", Event.ValueSize)
 		log.Printf("===========================================")
 
-		mapName := fmt.Sprintf("%s", string(Event.Name[:]))
+		mapName := string(Event.Name[:])
+		// Convert to byte array
+		key, err := AnyTypeToBytes(Event.Key)
+		if err != nil {
+			log.Fatalf("Error encoding data: %v", err)
+		}
 
         	// Update Prometheus metrics based on event type
         	switch Event.UpdateType.String() {
         	case "UPDATE":
-			if !isInArray(eBPFMaps[mapName], Event.Key) {
-				eBPFMaps[mapName] = append(eBPFMaps[mapName], Event.Key)
+			if !isInArray(mapsKeys[mapName], key) {
+				mapsKeys[mapName] = append(mapsKeys[mapName], key)
             			mapItemCountGauge.WithLabelValues(mapName).Inc()
 			} else {
 				log.Printf("Element %d already present in the %s map", Event.Key, mapName)
 				continue
 			}
         	case "DELETE":
-			for i, v := range eBPFMaps[mapName] {
-        			if v == Event.Key {
+			for i, v := range mapsKeys[mapName] {
+        			if compareBytes(v, key) {
 					// Removes the i-th element from the array
-            				eBPFMaps[mapName] = append(eBPFMaps[mapName][:i], eBPFMaps[mapName][i+1:]...)
+            				mapsKeys[mapName] = append(mapsKeys[mapName][:i], mapsKeys[mapName][i+1:]...)
             				mapItemCountGauge.WithLabelValues(mapName).Dec()
 					continue
         			}
+				log.Printf("Element %d not present in the %s map", Event.Key, mapName)
     			}
-			log.Printf("Element %d not present in the %s map", Event.Key, mapName)
         	}
 	}
 }
