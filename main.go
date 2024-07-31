@@ -112,6 +112,9 @@ func main() {
 	// The idea is to count the elements of each PINNED map
 	// Because after restart the metric values would be wrong
 	// TODO: How to resolve the non-pinned maps 
+	// FAILED ATTEMPT: I think the only way is to work directly with the maps that the program loads
+	// In other words, ONLY monitor maps that were also loaded by the same program
+	// It needs to be integrated into the tool  
 	eBPFMaps, err := restorePinnedMaps(); if err != nil {
 		log.Fatal("Failed to restore eBPF Pinned Maps: %s", err)
 	}
