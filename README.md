@@ -1,6 +1,20 @@
 # ebpf-map-metrics
 
-Run the program using:
+## Development Status
+
+This project is currently under development.
+
+**Note:** The tool only exposes metrics that were loaded by that same program. So it's not a generic standalone exporter and it requires for you to integrate it into you app. 
+
+So far it supports metrics for:
+
+- Hash eBPF Map
+- Array eBPF Map
+- Hash LRU eBPF Map
+
+## How to Run
+
+To run the program, follow these steps:
 
 ```
 go generate
