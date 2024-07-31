@@ -6,6 +6,12 @@ This project is currently under development.
 
 **Note:** The tool only counts elements in the array that were added or removed *after* the program starts running for NON-PINNED maps. We are actively exploring solutions to improve this functionality.
 
+So far it supports metrics for:
+
+- Hash eBPF Map
+- Array eBPF Map
+- Hash LRU eBPF Map
+
 ## How to Run
 
 To run the program, follow these steps:
