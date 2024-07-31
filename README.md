@@ -4,7 +4,7 @@
 
 This project is currently under development.
 
-**Note:** The tool only counts elements in the array that were added or removed *after* the program starts running. We are actively exploring solutions to improve this functionality.
+**Note:** The tool only counts elements in the array that were added or removed *after* the program starts running for NON-PINNED maps. We are actively exploring solutions to improve this functionality.
 
 ## How to Run
 
