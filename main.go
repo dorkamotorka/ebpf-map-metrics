@@ -3,7 +3,6 @@ package main
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target amd64 sync sync.c
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"unsafe"
@@ -21,22 +20,11 @@ var (
     mapItemCountGauge = prometheus.NewGaugeVec(
         prometheus.GaugeOpts{
             Name: "ebpf_map_item_count",
-            Help: "Current number of items in eBPF maps, labeled by map ID",
+            Help: "Current number of items in eBPF maps, labeled by map name",
         },
-        []string{"map_id"},
+        []string{"map_name"},
     )
 )
-
-// Function to check if an element is in an array
-func isInArray(arr []uint32, elem uint32) bool {
-    for _, v := range arr {
-        if v == elem {
-            return true
-        }
-    }
-    return false
-}
-
 
 func main() {
         reg := prometheus.NewRegistry()
@@ -109,14 +97,19 @@ func main() {
         }
         defer arrayDelete.Close()
 
-
 	rd, err := ringbuf.NewReader(syncObjs.MapEvents)
 	if err != nil {
 		panic(err)
 	}
 	defer rd.Close()
 
-	eBPFMaps := make(map[string][]uint32)
+	// The idea is to count the elements of each PINNED map
+	// Because after restart the metric values would be wrong
+	// TODO: How to resolve the non-pinned maps 
+	eBPFMaps, err := restorePinnedMaps(); if err != nil {
+		log.Fatal("Failed to restore eBPF Pinned Maps: %s", err)
+	}
+
 	for {
 		record, err := rd.Read()
 		if err != nil {
@@ -134,28 +127,33 @@ func main() {
 		log.Printf("Value Size: %d", Event.ValueSize)
 		log.Printf("===========================================")
 
-                // Convert map ID to string for use as a label
-        	mapIDStr := fmt.Sprintf("%d", Event.MapID)
+		mapName := string(Event.Name[:])
+		// Convert to byte array
+		key, err := AnyTypeToBytes(Event.Key)
+		if err != nil {
+			log.Fatalf("Error encoding data: %v", err)
+		}
 
         	// Update Prometheus metrics based on event type
         	switch Event.UpdateType.String() {
         	case "UPDATE":
-			if !isInArray(eBPFMaps[mapIDStr], Event.Key) {
-				eBPFMaps[mapIDStr] = append(eBPFMaps[mapIDStr], Event.Key)
-            			mapItemCountGauge.WithLabelValues(mapIDStr).Inc()
+			if !isInArray(eBPFMaps[mapName], key) {
+				eBPFMaps[mapName] = append(eBPFMaps[mapName], key)
+            			mapItemCountGauge.WithLabelValues(mapName).Inc()
 			} else {
-				log.Println("Element %d already present in the map", Event.Key)
+				log.Printf("Element %d already present in the %s map", Event.Key, mapName)
 				continue
 			}
         	case "DELETE":
-			for i, v := range eBPFMaps[mapIDStr] {
-        			if v == Event.Key {
-            				eBPFMaps[mapIDStr] = append(eBPFMaps[mapIDStr][:i], eBPFMaps[mapIDStr][i+1:]...)
-            				mapItemCountGauge.WithLabelValues(mapIDStr).Dec()
+			for i, v := range eBPFMaps[mapName] {
+        			if compareBytes(v, key) {
+					// Removes the i-th element from the array
+            				eBPFMaps[mapName] = append(eBPFMaps[mapName][:i], eBPFMaps[mapName][i+1:]...)
+            				mapItemCountGauge.WithLabelValues(mapName).Dec()
 					continue
         			}
+				log.Printf("Element %d not present in the %s map", Event.Key, mapName)
     			}
-			log.Println("Element %d not present in the map", Event.Key)
         	}
 	}
 }
