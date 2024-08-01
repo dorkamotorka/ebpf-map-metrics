@@ -22,16 +22,16 @@ var (
     mapItemCountGauge = prometheus.NewGaugeVec(
         prometheus.GaugeOpts{
             Name: "ebpf_map_item_count",
-            Help: "Current number of items in eBPF maps, labeled by map name",
+            Help: "Current number of items in eBPF maps, labeled by map ID",
         },
-        []string{"map_name"},
+        []string{"map_id"},
     )
 )
 
-func getMapKeys(m *ebpf.Map) ([][]byte, error) {
+func getMapKeysLen(m *ebpf.Map) (int, error) {
     var keys [][]byte
     info, err := m.Info(); if err != nil {
-	return nil, err
+	return -1, err
     }
 
     keySize := int(info.KeySize)
@@ -42,14 +42,12 @@ func getMapKeys(m *ebpf.Map) ([][]byte, error) {
     it := m.Iterate()
     for it.Next(&key, &value) {
 	// append key if value non-zero
-	//
 	if isNonZero(value) {
 		keys = append(keys, append([]byte(nil), key...))
-		mapItemCountGauge.WithLabelValues(info.Name).Inc()
 	}
     }  
 
-    return keys, nil
+    return len(keys), nil
 }
 
 
@@ -124,29 +122,37 @@ func main() {
         }
         defer arrayDelete.Close()
 
+	mapsIDs := make(map[string]*ebpf.Map)
+	mapsLengths := make(map[string]int)
+
 	// Append all maps we track into the array so we can loop through it
 	var maps []*ebpf.Map
 	maps = append(maps, syncObjs.syncMaps.ArrayMap, syncObjs.syncMaps.HashMap, syncObjs.syncMaps.LruHashMap)
-
-	mapsKeys := make(map[string][][]byte)
 	for _, m := range maps {
 		info, err := m.Info()
 		if err != nil {
 		    log.Fatalf("Failed to get map info: %v", err)
 		}
 
-		mapName := info.Name
-		keys, err := getMapKeys(m)
+		mapID, opt := info.ID()
+		if !opt {
+		    log.Printf("Map %s doesn't not support ID() call", info.Name)
+		    continue
+		}
+		id := fmt.Sprintf("%d", mapID)
+		mapsIDs[id] = m
+		length, err := getMapKeysLen(m)
 		if err != nil {
-		    log.Fatalf("Failed to get keys for map %s: %v", mapName, err)
+		    log.Fatalf("Failed to get keys for map %s: %v", id, err)
 		}
 
-		mapsKeys[mapName] = keys
+		mapsLengths[id] = length
+            	mapItemCountGauge.WithLabelValues(id).Set(float64(length))
 	}
 
-	// Print the keys for each map for debugging
-	for name, keys := range mapsKeys {
-		fmt.Printf("Map %s has keys: %v\n", name, keys)
+	// Print the number of keys for each map for debugging
+	for name, l := range mapsLengths {
+		fmt.Printf("Map %s has %d keys\n", name, l)
 	}
 
 
@@ -173,33 +179,18 @@ func main() {
 		log.Printf("Value Size: %d", Event.ValueSize)
 		log.Printf("===========================================")
 
-		mapName := string(Event.Name[:])
-		// Convert to byte array
-		key, err := AnyTypeToBytes(Event.Key)
-		if err != nil {
-			log.Fatalf("Error encoding data: %v", err)
+		mapID := fmt.Sprintf("%d", Event.MapID)
+		m := mapsIDs[mapID]
+		
+		// Since the metrics of all other maps (then the one loaded by this program) would be wrong, we skip them
+		_, ok := mapsLengths[mapID]; if !ok {
+			continue
 		}
 
-        	// Update Prometheus metrics based on event type
-        	switch Event.UpdateType.String() {
-        	case "UPDATE":
-			if !isInArray(mapsKeys[mapName], key) {
-				mapsKeys[mapName] = append(mapsKeys[mapName], key)
-            			mapItemCountGauge.WithLabelValues(mapName).Inc()
-			} else {
-				log.Printf("Element %d already present in the %s map", Event.Key, mapName)
-				continue
-			}
-        	case "DELETE":
-			for i, v := range mapsKeys[mapName] {
-        			if compareBytes(v, key) {
-					// Removes the i-th element from the array
-            				mapsKeys[mapName] = append(mapsKeys[mapName][:i], mapsKeys[mapName][i+1:]...)
-            				mapItemCountGauge.WithLabelValues(mapName).Dec()
-					continue
-        			}
-				log.Printf("Element %d not present in the %s map", Event.Key, mapName)
-    			}
-        	}
+		length, err := getMapKeysLen(m); if err != nil {
+			log.Printf("Failed to get length of the map %s", mapID)
+			continue
+		}
+            	mapItemCountGauge.WithLabelValues(mapID).Set(float64(length))
 	}
 }

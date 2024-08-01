@@ -1,10 +1,5 @@
 package main
 
-import (
-        "bytes"
-        "encoding/gob"
-)
-
 const BPF_NAME_LEN = 16
 
 // Order matters!
@@ -39,40 +34,6 @@ func (e MapUpdater) String() string {
 	default:
 		return "UNKNOWN"
 	}
-}
-
-// AnyTypeToBytes converts a variable of any type to a byte array using gob encoding
-func AnyTypeToBytes(data interface{}) ([]byte, error) {
-        var buf bytes.Buffer
-        enc := gob.NewEncoder(&buf)
-        if err := enc.Encode(data); err != nil {
-                return nil, err
-        }
-        return buf.Bytes(), nil
-}
-
-func compareBytes(a, b []byte) bool {
-        if len(a) != len(b) {
-                return false
-        }
-
-        // Check byte by byte if they match
-        for i := range a {
-                if a[i] != b[i] {
-                        return false
-                }
-        }
-        return true
-}
-
-// Function to check if an element is in an array
-func isInArray(arr [][]byte, elem []byte) bool {
-    for _, v := range arr {
-        if compareBytes(v, elem) {
-            return true
-        }
-    }
-    return false
 }
 
 // isNonZero checks if all the bytes are non-zero
