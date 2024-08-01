@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"unsafe"
-	"errors"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -37,13 +36,6 @@ func getMapKeysLen(m *ebpf.Map) (int, error) {
     info, err := m.Info(); if err != nil {
 	return -1, err
     }
-
-    mapID, opt := info.ID()
-    if !opt {
-       log.Printf("Map %s doesn't not support ID() call", info.Name)
-       return nil, errors.New("doesn't support ID()")
-    }
-    id := fmt.Sprintf("%d", mapID)
 
     keySize := int(info.KeySize)
     valueSize := int(info.ValueSize)
