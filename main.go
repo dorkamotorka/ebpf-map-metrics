@@ -7,20 +7,16 @@ import (
 	"fmt"
 	"net/http"
 	"unsafe"
-
+	
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
-
-    	"github.com/prometheus/client_golang/prometheus"
-    	"github.com/prometheus/client_golang/prometheus/promhttp"
+	
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Define Prometheus metrics
-// NOTE: Labelling by string is kinda tricky, so we do it with ID for now
-// Pinned maps, retain the ID!
-// If pinned map file deleted, it gets a new ID but the developer should be aware of that
 var (	   
     mapItemCountGauge = prometheus.NewGaugeVec(
         prometheus.GaugeOpts{
