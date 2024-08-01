@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"unsafe"
+	"errors"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -18,6 +19,9 @@ import (
 )
 
 // Define Prometheus metrics
+// NOTE: Labelling by string is kinda tricky, so we do it with ID for now
+// Pinned maps, retain the ID!
+// If pinned map file deleted, it gets a new ID but the developer should be aware of that
 var (	   
     mapItemCountGauge = prometheus.NewGaugeVec(
         prometheus.GaugeOpts{
@@ -33,6 +37,13 @@ func getMapKeysLen(m *ebpf.Map) (int, error) {
     info, err := m.Info(); if err != nil {
 	return -1, err
     }
+
+    mapID, opt := info.ID()
+    if !opt {
+       log.Printf("Map %s doesn't not support ID() call", info.Name)
+       return nil, errors.New("doesn't support ID()")
+    }
+    id := fmt.Sprintf("%d", mapID)
 
     keySize := int(info.KeySize)
     valueSize := int(info.ValueSize)
