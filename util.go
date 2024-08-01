@@ -2,7 +2,7 @@ package main
 
 import (
         "bytes"
-        "encoding/gob"
+	"encoding/binary"
 )
 
 const BPF_NAME_LEN = 16
@@ -41,14 +41,13 @@ func (e MapUpdater) String() string {
 	}
 }
 
-// AnyTypeToBytes converts a variable of any type to a byte array using gob encoding
-func AnyTypeToBytes(data interface{}) ([]byte, error) {
-        var buf bytes.Buffer
-        enc := gob.NewEncoder(&buf)
-        if err := enc.Encode(data); err != nil {
-                return nil, err
-        }
-        return buf.Bytes(), nil
+func uintToBytes(n uint32) ([]byte, error) {
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.LittleEndian, n)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func compareBytes(a, b []byte) bool {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"unsafe"
+	"errors"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -18,13 +19,16 @@ import (
 )
 
 // Define Prometheus metrics
+// NOTE: Labelling by string is kinda tricky, so we do it with ID for now
+// Pinned maps, retain the ID!
+// If pinned map file deleted, it gets a new ID but the developer should be aware of that
 var (	   
     mapItemCountGauge = prometheus.NewGaugeVec(
         prometheus.GaugeOpts{
             Name: "ebpf_map_item_count",
-            Help: "Current number of items in eBPF maps, labeled by map name",
+            Help: "Current number of items in eBPF maps, labeled by map ID",
         },
-        []string{"map_name"},
+        []string{"map_id"},
     )
 )
 
@@ -34,6 +38,13 @@ func getMapKeys(m *ebpf.Map) ([][]byte, error) {
 	return nil, err
     }
 
+    mapID, opt := info.ID()
+    if !opt {
+       log.Printf("Map %s doesn't not support ID() call", info.Name)
+       return nil, errors.New("doesn't support ID()")
+    }
+    id := fmt.Sprintf("%d", mapID)
+
     keySize := int(info.KeySize)
     valueSize := int(info.ValueSize)
 
@@ -42,10 +53,9 @@ func getMapKeys(m *ebpf.Map) ([][]byte, error) {
     it := m.Iterate()
     for it.Next(&key, &value) {
 	// append key if value non-zero
-	//
 	if isNonZero(value) {
 		keys = append(keys, append([]byte(nil), key...))
-		mapItemCountGauge.WithLabelValues(info.Name).Inc()
+		mapItemCountGauge.WithLabelValues(string(id)).Inc()
 	}
     }  
 
@@ -135,13 +145,18 @@ func main() {
 		    log.Fatalf("Failed to get map info: %v", err)
 		}
 
-		mapName := info.Name
+		mapID, opt := info.ID()
+		if !opt {
+		    log.Printf("Map %s doesn't not support ID() call", info.Name)
+		    continue
+		}
+		id := fmt.Sprintf("%d", mapID)
 		keys, err := getMapKeys(m)
 		if err != nil {
-		    log.Fatalf("Failed to get keys for map %s: %v", mapName, err)
+		    log.Fatalf("Failed to get keys for map %s: %v", id, err)
 		}
 
-		mapsKeys[mapName] = keys
+		mapsKeys[id] = keys
 	}
 
 	// Print the keys for each map for debugging
@@ -173,9 +188,18 @@ func main() {
 		log.Printf("Value Size: %d", Event.ValueSize)
 		log.Printf("===========================================")
 
-		mapName := string(Event.Name[:])
+		mapID := fmt.Sprintf("%d", Event.MapID)
+		
+		// Since the metrics of all other maps (then the one loaded by this program) would be wrong, we skip them
+		_, ok := mapsKeys[mapID]; if !ok {
+			continue
+		}
+
 		// Convert to byte array
-		key, err := AnyTypeToBytes(Event.Key)
+		// NOTE: only key of type uint is demonstrated
+		// If the key is of different type it needs to be changed both in ring buffer event
+		// As well as figure out a way to compare it to keys already stored in the map (retrieved from pinned map)
+		key, err := uintToBytes(Event.Key)
 		if err != nil {
 			log.Fatalf("Error encoding data: %v", err)
 		}
@@ -183,22 +207,22 @@ func main() {
         	// Update Prometheus metrics based on event type
         	switch Event.UpdateType.String() {
         	case "UPDATE":
-			if !isInArray(mapsKeys[mapName], key) {
-				mapsKeys[mapName] = append(mapsKeys[mapName], key)
-            			mapItemCountGauge.WithLabelValues(mapName).Inc()
+			if !isInArray(mapsKeys[mapID], key) {
+				mapsKeys[mapID] = append(mapsKeys[mapID], key)
+            			mapItemCountGauge.WithLabelValues(mapID).Inc()
 			} else {
-				log.Printf("Element %d already present in the %s map", Event.Key, mapName)
+				log.Printf("Element %d already present in the %s map", Event.Key, mapID)
 				continue
 			}
         	case "DELETE":
-			for i, v := range mapsKeys[mapName] {
+			for i, v := range mapsKeys[mapID] {
         			if compareBytes(v, key) {
 					// Removes the i-th element from the array
-            				mapsKeys[mapName] = append(mapsKeys[mapName][:i], mapsKeys[mapName][i+1:]...)
-            				mapItemCountGauge.WithLabelValues(mapName).Dec()
+            				mapsKeys[mapID] = append(mapsKeys[mapID][:i], mapsKeys[mapID][i+1:]...)
+            				mapItemCountGauge.WithLabelValues(mapID).Dec()
 					continue
         			}
-				log.Printf("Element %d not present in the %s map", Event.Key, mapName)
+				log.Printf("Element %d not present in the %s map", Event.Key, mapID)
     			}
         	}
 	}
