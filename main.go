@@ -194,7 +194,6 @@ func main() {
 		_, ok := mapsKeys[mapID]; if !ok {
 			continue
 		}
-
 		// Convert to byte array
 		// NOTE: only key of type uint is demonstrated
 		// If the key is of different type it needs to be changed both in ring buffer event
