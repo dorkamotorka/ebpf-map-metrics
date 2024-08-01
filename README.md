@@ -4,7 +4,7 @@
 
 This project is currently under development.
 
-**Note:** The tool only exposes metrics that were loaded by that same program. So it's not a generic standalone exporter and it requires for you to integrate it into you app. Also at its current state it only support keys of type **uint32**. To support arbitrary data type, some additional stuff needs to be added on top.
+**Note:** The tool only exposes metrics that were loaded by that same program. So it's not a generic standalone exporter and it requires for you to integrate it into you app.
 
 
 So far it supports metrics for:
