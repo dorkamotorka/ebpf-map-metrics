@@ -4,6 +4,8 @@
 
 This project is currently under development.
 
+It requires `6.6+` Linux Kernel, due to `bpf_map_sum_elem_count` kfunc.
+
 ## How to Run
 
 To run the program, follow these steps:
