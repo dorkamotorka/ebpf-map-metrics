@@ -9724,7 +9724,6 @@ enum bh_state_bits {
 enum bhi_mitigations {
 	BHI_MITIGATION_OFF = 0,
 	BHI_MITIGATION_ON = 1,
-	BHI_MITIGATION_AUTO = 2,
 };
 
 enum bio_merge_status {
@@ -9982,7 +9981,7 @@ enum bpf_arg_type {
 	ARG_PTR_TO_SOCKET_OR_NULL = 271,
 	ARG_PTR_TO_ALLOC_MEM_OR_NULL = 273,
 	ARG_PTR_TO_STACK_OR_NULL = 278,
-	__BPF_ARG_TYPE_LIMIT = 1023,
+	__BPF_ARG_TYPE_LIMIT = 2047,
 };
 
 enum bpf_attach_type {
@@ -10425,7 +10424,7 @@ enum bpf_reg_type {
 	PTR_TO_SOCK_COMMON_OR_NULL = 268,
 	PTR_TO_TCP_SOCK_OR_NULL = 269,
 	PTR_TO_BTF_ID_OR_NULL = 272,
-	__BPF_REG_TYPE_LIMIT = 1023,
+	__BPF_REG_TYPE_LIMIT = 2047,
 };
 
 enum bpf_ret_code {
@@ -10450,9 +10449,9 @@ enum bpf_return_type {
 	RET_PTR_TO_SOCKET_OR_NULL = 259,
 	RET_PTR_TO_TCP_SOCK_OR_NULL = 260,
 	RET_PTR_TO_SOCK_COMMON_OR_NULL = 261,
-	RET_PTR_TO_ALLOC_MEM_OR_NULL = 262,
+	RET_PTR_TO_ALLOC_MEM_OR_NULL = 1286,
 	RET_PTR_TO_BTF_ID_OR_NULL = 264,
-	__BPF_RET_TYPE_LIMIT = 1023,
+	__BPF_RET_TYPE_LIMIT = 2047,
 };
 
 enum bpf_stack_build_id_status {
@@ -10522,7 +10521,8 @@ enum bpf_type {
 enum bpf_type_flag {
 	PTR_MAYBE_NULL = 256,
 	MEM_RDONLY = 512,
-	__BPF_TYPE_LAST_FLAG = 512,
+	MEM_ALLOC = 1024,
+	__BPF_TYPE_LAST_FLAG = 1024,
 };
 
 enum bpf_xdp_mode {
@@ -11104,6 +11104,8 @@ enum cpuid_leafs {
 	CPUID_7_EDX = 18,
 	CPUID_8000_001F_EAX = 19,
 	CPUID_8000_0021_EAX = 20,
+	CPUID_LNX_5 = 21,
+	NR_CPUID_WORDS = 22,
 };
 
 enum cpuid_regs_idx {
@@ -13169,7 +13171,8 @@ enum fanotify_event_type {
 	FANOTIFY_EVENT_TYPE_PATH = 2,
 	FANOTIFY_EVENT_TYPE_PATH_PERM = 3,
 	FANOTIFY_EVENT_TYPE_OVERFLOW = 4,
-	__FANOTIFY_EVENT_TYPE_NUM = 5,
+	FANOTIFY_EVENT_TYPE_FS_ERROR = 5,
+	__FANOTIFY_EVENT_TYPE_NUM = 6,
 };
 
 enum fault_flag {
@@ -13554,15 +13557,26 @@ enum fsnotify_data_type {
 	FSNOTIFY_EVENT_NONE = 0,
 	FSNOTIFY_EVENT_PATH = 1,
 	FSNOTIFY_EVENT_INODE = 2,
+	FSNOTIFY_EVENT_DENTRY = 3,
+	FSNOTIFY_EVENT_ERROR = 4,
+};
+
+enum fsnotify_iter_type {
+	FSNOTIFY_ITER_TYPE_INODE = 0,
+	FSNOTIFY_ITER_TYPE_VFSMOUNT = 1,
+	FSNOTIFY_ITER_TYPE_SB = 2,
+	FSNOTIFY_ITER_TYPE_PARENT = 3,
+	FSNOTIFY_ITER_TYPE_INODE2 = 4,
+	FSNOTIFY_ITER_TYPE_COUNT = 5,
 };
 
 enum fsnotify_obj_type {
+	FSNOTIFY_OBJ_TYPE_ANY = 4294967295,
 	FSNOTIFY_OBJ_TYPE_INODE = 0,
-	FSNOTIFY_OBJ_TYPE_PARENT = 1,
-	FSNOTIFY_OBJ_TYPE_VFSMOUNT = 2,
-	FSNOTIFY_OBJ_TYPE_SB = 3,
-	FSNOTIFY_OBJ_TYPE_COUNT = 4,
-	FSNOTIFY_OBJ_TYPE_DETACHED = 4,
+	FSNOTIFY_OBJ_TYPE_VFSMOUNT = 1,
+	FSNOTIFY_OBJ_TYPE_SB = 2,
+	FSNOTIFY_OBJ_TYPE_COUNT = 3,
+	FSNOTIFY_OBJ_TYPE_DETACHED = 3,
 };
 
 enum ftrace_bug_type {
@@ -15146,6 +15160,7 @@ enum insn_type {
 	NOP = 1,
 	JMP = 2,
 	RET = 3,
+	JCC = 4,
 };
 
 enum int_type {
@@ -20095,6 +20110,12 @@ enum retbleed_mitigation_cmd {
 	RETBLEED_CMD_IBPB = 3,
 };
 
+enum rfds_mitigations {
+	RFDS_MITIGATION_OFF = 0,
+	RFDS_MITIGATION_VERW = 1,
+	RFDS_MITIGATION_UCODE_NEEDED = 2,
+};
+
 enum rfkill_hard_block_reasons {
 	RFKILL_HARD_BLOCK_SIGNAL = 1,
 	RFKILL_HARD_BLOCK_NOT_OWNER = 2,
@@ -22823,6 +22844,7 @@ enum unix_socket_lock_class {
 	U_LOCK_NORMAL = 0,
 	U_LOCK_SECOND = 1,
 	U_LOCK_DIAG = 2,
+	U_LOCK_GC_LISTENER = 3,
 };
 
 enum uprobe_filter_ctx {
@@ -24087,7 +24109,7 @@ typedef long unsigned int old_sigset_t;
 
 typedef long unsigned int p4dval_t;
 
-typedef long unsigned int perf_trace_t[256];
+typedef long unsigned int perf_trace_t[1024];
 
 typedef long unsigned int pgdval_t;
 
@@ -34699,7 +34721,7 @@ struct fsnotify_mark {
 	spinlock_t lock;
 	struct hlist_node obj_list;
 	struct fsnotify_mark_connector *connector;
-	__u32 ignored_mask;
+	__u32 ignore_mask;
 	unsigned int flags;
 };
 
@@ -41517,6 +41539,7 @@ struct br_input_skb_cb {
 	u8 mrouters_only: 1;
 	u8 proxyarp_replied: 1;
 	u8 src_port_isolated: 1;
+	u8 promisc: 1;
 	u8 vlan_filtered: 1;
 	u8 br_netfilter_broute: 1;
 	u8 tx_fwd_offload: 1;
@@ -45225,6 +45248,7 @@ struct clk_core {
 	struct clk_hw *hw;
 	struct module *owner;
 	struct device *dev;
+	struct hlist_node rpm_node;
 	struct device_node *of_node;
 	struct clk_core *parent;
 	struct clk_parent_map *parents;
@@ -49126,7 +49150,7 @@ struct cpuinfo_x86 {
 	__u32 extended_cpuid_level;
 	int cpuid_level;
 	union {
-		__u32 x86_capability[23];
+		__u32 x86_capability[24];
 		long unsigned int x86_capability_alignment;
 	};
 	char x86_vendor_id[16];
@@ -53361,6 +53385,7 @@ struct dma_map_ops {
 	int (*dma_supported)(struct device *, u64);
 	u64 (*get_required_mask)(struct device *);
 	size_t (*max_mapping_size)(struct device *);
+	size_t (*opt_mapping_size)();
 	long unsigned int (*get_merge_boundary)(struct device *);
 };
 
@@ -54267,6 +54292,7 @@ struct dsa_switch_ops {
 	int (*resume)(struct dsa_switch *);
 	int (*port_enable)(struct dsa_switch *, int, struct phy_device *);
 	void (*port_disable)(struct dsa_switch *, int);
+	struct dsa_port * (*preferred_default_local_cpu_port)(struct dsa_switch *);
 	int (*set_mac_eee)(struct dsa_switch *, int, struct ethtool_eee *);
 	int (*get_mac_eee)(struct dsa_switch *, int, struct ethtool_eee *);
 	int (*get_eeprom_len)(struct dsa_switch *);
@@ -54968,8 +54994,14 @@ struct dwc2_host_chan {
 
 struct dwc2_hregs_backup {
 	u32 hcfg;
+	u32 hflbaddr;
 	u32 haintmsk;
+	u32 hcchar[16];
+	u32 hcsplt[16];
 	u32 hcintmsk[16];
+	u32 hctsiz[16];
+	u32 hcidma[16];
+	u32 hcidmab[16];
 	u32 hprt0;
 	u32 hfir;
 	u32 hptxfsiz;
@@ -59507,10 +59539,35 @@ struct fanotify_event {
 	struct pid *pid;
 };
 
+struct fanotify_fh {
+	u8 type;
+	u8 len;
+	u8 flags;
+	u8 pad;
+	unsigned char buf[0];
+};
+
+struct fanotify_error_event {
+	struct fanotify_event fae;
+	s32 error;
+	u32 err_count;
+	__kernel_fsid_t fsid;
+	struct {
+		struct fanotify_fh object_fh;
+		unsigned char _inline_fh_buf[128];
+	};
+};
+
 struct fanotify_event_info_header {
 	__u8 info_type;
 	__u8 pad;
 	__u16 len;
+};
+
+struct fanotify_event_info_error {
+	struct fanotify_event_info_header hdr;
+	__s32 error;
+	__u32 error_count;
 };
 
 struct fanotify_event_info_fid {
@@ -59534,19 +59591,13 @@ struct fanotify_event_metadata {
 	__s32 pid;
 };
 
-struct fanotify_fh {
-	u8 type;
-	u8 len;
-	u8 flags;
-	u8 pad;
-	unsigned char buf[0];
-};
-
 struct fanotify_fid_event {
 	struct fanotify_event fae;
 	__kernel_fsid_t fsid;
-	struct fanotify_fh object_fh;
-	unsigned char _inline_fh_buf[12];
+	struct {
+		struct fanotify_fh object_fh;
+		unsigned char _inline_fh_buf[12];
+	};
 };
 
 struct fanotify_group_private_data {
@@ -59556,13 +59607,16 @@ struct fanotify_group_private_data {
 	int flags;
 	int f_flags;
 	struct ucounts *ucounts;
+	mempool_t error_events_pool;
 };
 
 struct fanotify_info {
 	u8 dir_fh_totlen;
+	u8 dir2_fh_totlen;
 	u8 file_fh_totlen;
 	u8 name_len;
-	u8 pad;
+	u8 name2_len;
+	u8 pad[3];
 	unsigned char buf[0];
 };
 
@@ -62716,6 +62770,12 @@ struct fs_disk_quota {
 	char d_padding4[8];
 };
 
+struct fs_error_report {
+	int error;
+	struct inode *inode;
+	struct super_block *sb;
+};
+
 struct fs_parameter {
 	const char *key;
 	enum fs_value_type type: 8;
@@ -63146,6 +63206,8 @@ struct fsnotify_group {
 	unsigned int max_events;
 	unsigned int priority;
 	bool shutdown;
+	int flags;
+	unsigned int owner_flags;
 	struct mutex mark_mutex;
 	atomic_t user_waits;
 	struct list_head marks_list;
@@ -63160,7 +63222,8 @@ struct fsnotify_group {
 };
 
 struct fsnotify_iter_info {
-	struct fsnotify_mark *marks[4];
+	struct fsnotify_mark *marks[5];
+	struct fsnotify_group *current_group;
 	unsigned int report_mask;
 	int srcu_idx;
 };
@@ -63184,7 +63247,7 @@ struct fsnotify_ops {
 	int (*handle_inode_event)(struct fsnotify_mark *, u32, struct inode *, struct inode *, const struct qstr *, u32);
 	void (*free_group_priv)(struct fsnotify_group *);
 	void (*freeing_mark)(struct fsnotify_mark *, struct fsnotify_group *);
-	void (*free_event)(struct fsnotify_event *);
+	void (*free_event)(struct fsnotify_group *, struct fsnotify_event *);
 	void (*free_mark)(struct fsnotify_mark *);
 };
 
@@ -78340,6 +78403,7 @@ struct kvm_vcpu_arch {
 	int halt_request;
 	int cpuid_nent;
 	struct kvm_cpuid_entry2 *cpuid_entries;
+	bool is_amd_compatible;
 	u64 reserved_gpa_bits;
 	int maxphyaddr;
 	struct x86_emulate_ctxt *emulate_ctxt;
@@ -79492,6 +79556,7 @@ struct location {
 };
 
 struct lock_manager_operations {
+	void *lm_mod_owner;
 	fl_owner_t (*lm_get_owner)(fl_owner_t);
 	void (*lm_put_owner)(fl_owner_t);
 	void (*lm_notify)(struct file_lock *);
@@ -79500,6 +79565,8 @@ struct lock_manager_operations {
 	int (*lm_change)(struct file_lock *, int, struct list_head *);
 	void (*lm_setup)(struct file_lock *, void **);
 	bool (*lm_breaker_owns_lease)(struct file_lock *);
+	bool (*lm_lock_expirable)(struct file_lock *);
+	void (*lm_expire_lock)();
 };
 
 struct locks_iterator {
@@ -86316,6 +86383,12 @@ struct netns_nftables {
 	u8 gencursor;
 };
 
+struct nf_flow_table_stat;
+
+struct netns_ft {
+	struct nf_flow_table_stat *stat;
+};
+
 struct netns_bpf {
 	struct bpf_prog_array *run_array[2];
 	struct bpf_prog *progs[2];
@@ -86489,10 +86562,10 @@ struct net {
 	struct netns_nf nf;
 	struct netns_ct ct;
 	struct netns_nftables nft;
+	struct netns_ft ft;
 	struct sk_buff_head wext_nlevents;
 	struct net_generic *gen;
 	struct netns_bpf bpf;
-	long: 64;
 	long: 64;
 	long: 64;
 	long: 64;
@@ -88310,6 +88383,12 @@ struct nf_exp_event {
 	int report;
 };
 
+struct nf_flow_table_stat {
+	unsigned int count_wq_add;
+	unsigned int count_wq_del;
+	unsigned int count_wq_stats;
+};
+
 struct nf_hook_state;
 
 typedef unsigned int nf_hookfn(void *, struct sk_buff *, const struct nf_hook_state *);
@@ -88515,7 +88594,7 @@ struct rpc_wait_queue {
 	unsigned char maxpriority;
 	unsigned char priority;
 	unsigned char nr;
-	short unsigned int qlen;
+	unsigned int qlen;
 	struct rpc_timer timer_list;
 	const char *name;
 };
@@ -92031,6 +92110,7 @@ struct pci_dev {
 	unsigned int link_active_reporting: 1;
 	unsigned int no_vf_scan: 1;
 	unsigned int no_command_memory: 1;
+	unsigned int rom_bar_overlap: 1;
 	pci_dev_flags_t dev_flags;
 	atomic_t enable_cnt;
 	u32 saved_config_space[16];
@@ -97520,7 +97600,6 @@ struct rb_irq_work {
 	struct irq_work work;
 	wait_queue_head_t waiters;
 	wait_queue_head_t full_waiters;
-	long int wait_index;
 	bool waiters_pending;
 	bool full_waiters_pending;
 	bool wakeup_full;
@@ -107937,10 +108016,11 @@ struct svc_pool {
 
 struct svc_procedure {
 	__be32 (*pc_func)(struct svc_rqst *);
-	int (*pc_decode)(struct svc_rqst *, __be32 *);
-	int (*pc_encode)(struct svc_rqst *, __be32 *);
+	bool (*pc_decode)(struct svc_rqst *, struct xdr_stream *);
+	bool (*pc_encode)(struct svc_rqst *, struct xdr_stream *);
 	void (*pc_release)(struct svc_rqst *);
 	unsigned int pc_argsize;
+	unsigned int pc_argzero;
 	unsigned int pc_ressize;
 	unsigned int pc_cachetype;
 	unsigned int pc_xdrressize;
@@ -108041,12 +108121,11 @@ struct svc_rqst {
 	void **rq_lease_breaker;
 };
 
-struct svc_serv_ops;
-
 struct svc_serv {
 	struct svc_program *sv_program;
 	struct svc_stat *sv_stats;
 	spinlock_t sv_lock;
+	struct kref sv_refcnt;
 	unsigned int sv_nrthreads;
 	unsigned int sv_maxconn;
 	unsigned int sv_max_payload;
@@ -108059,19 +108138,11 @@ struct svc_serv {
 	char *sv_name;
 	unsigned int sv_nrpools;
 	struct svc_pool *sv_pools;
-	const struct svc_serv_ops *sv_ops;
+	int (*sv_threadfn)(void *);
 	struct list_head sv_cb_list;
 	spinlock_t sv_cb_lock;
 	wait_queue_head_t sv_cb_waitq;
 	bool sv_bc_enabled;
-};
-
-struct svc_serv_ops {
-	void (*svo_shutdown)(struct svc_serv *, struct net *);
-	int (*svo_function)(void *);
-	void (*svo_enqueue_xprt)(struct svc_xprt *);
-	int (*svo_setup)(struct svc_serv *, struct svc_pool *, int);
-	struct module *svo_module;
 };
 
 struct svc_stat {
@@ -121186,7 +121257,7 @@ struct unix_sock {
 	struct mutex bindlock;
 	struct sock *peer;
 	struct list_head link;
-	atomic_long_t inflight;
+	long unsigned int inflight;
 	spinlock_t lock;
 	long unsigned int gc_flags;
 	long: 64;
@@ -124761,6 +124832,7 @@ struct virqfd {
 	wait_queue_entry_t wait;
 	poll_table pt;
 	struct work_struct shutdown;
+	struct work_struct flush_inject;
 	struct virqfd **pvirqfd;
 };
 
@@ -132112,6 +132184,8 @@ typedef int (*proc_visitor)(struct task_struct *, void *);
 typedef int (*pte_fn_t)(pte_t *, long unsigned int, void *);
 
 typedef ssize_t (*read_fn)(struct file *, char *, size_t, loff_t *);
+
+typedef bool (*ring_buffer_cond_fn)(void *);
 
 typedef int (*rproc_handle_resource_t)(struct rproc *, void *, int, int);
 

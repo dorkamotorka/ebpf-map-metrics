@@ -1,195 +1,107 @@
 package main
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target amd64 sync sync.c
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go count count.c
 
 import (
-	"log"
+	"bufio"
 	"fmt"
+	"log"
 	"net/http"
-	"unsafe"
-	
-	"github.com/cilium/ebpf"
+	"time"
+
 	"github.com/cilium/ebpf/link"
-	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
-	
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-var (	   
-    mapItemCountGauge = prometheus.NewGaugeVec(
-        prometheus.GaugeOpts{
-            Name: "ebpf_map_item_count",
-            Help: "Current number of items in eBPF maps, labeled by map ID",
-        },
-        []string{"map_id"},
-    )
+const (
+	UPDATE_INTERVAL = 1 // sec
 )
 
-func getMapKeysLen(m *ebpf.Map) (int, error) {
-    var keys [][]byte
-    info, err := m.Info(); if err != nil {
-	return -1, err
-    }
+var (
+	mapElemCountGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "ebpf_map_curr_elem_count",
+			Help: "Current number of elements in eBPF maps, labeled by map ID and name",
+		},
+		[]string{"id", "name"},
+	)
 
-    keySize := int(info.KeySize)
-    valueSize := int(info.ValueSize)
-
-    key := make([]byte, keySize)
-    value := make([]byte, valueSize)
-    it := m.Iterate()
-    for it.Next(&key, &value) {
-	// append key if value non-zero
-	if isNonZero(value) {
-		keys = append(keys, append([]byte(nil), key...))
-	}
-    }  
-
-    return len(keys), nil
-}
-
+	mapPressureGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "ebpf_map_pressure",
+			Help: "Current pressure of eBPF maps (currElements / maxElements), labeled by map ID and name",
+		},
+		[]string{"id", "name"},
+	)
+)
 
 func main() {
-        reg := prometheus.NewRegistry()
-    	reg.MustRegister(mapItemCountGauge)
-    	handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
- 	// Start HTTP server for Prometheus metrics
-    	http.Handle("/metrics", handler)
-    	go func() {
-        	log.Fatal(http.ListenAndServe(":2112", nil))
-    	}()
-    	log.Println("Prometheus metrics available at http://localhost:2112/metrics")
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(mapElemCountGauge)
+	reg.MustRegister(mapPressureGauge)
 
-	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to remove memlock limit: %v", err)
 	}
 
-	// Load pre-compiled programs and maps into the kernel.
-	syncObjs := syncObjects{}
-	if err := loadSyncObjects(&syncObjs, &ebpf.CollectionOptions{Maps: ebpf.MapOptions{PinPath: "/sys/fs/bpf/test/maps"}}); err != nil {
-		log.Fatal(err)
+	objs := countObjects{}
+	if err := loadCountObjects(&objs, nil); err != nil {
+		log.Fatalf("Failed to load objects: %v", err)
 	}
-	defer syncObjs.Close()
+	defer objs.Close()
 
-	hashMapUpdate, err := link.AttachTracing(link.TracingOptions{
-		Program: syncObjs.syncPrograms.BpfProgKernHmapupdate,
+	// Attach the program to the Iterator hook.
+	iterLink, err := link.AttachIter(link.IterOptions{
+		Program: objs.DumpBpfMap,
 	})
 	if err != nil {
-		log.Fatalf("opening htab_map_update_elem kprobe: %s", err)
+		log.Fatalf("Failed to attach eBPF program: %v", err)
 	}
-	defer hashMapUpdate.Close()
+	defer iterLink.Close()
+	log.Println("eBPF program attached successfully.")
 
-	hashMapDelete, err := link.AttachTracing(link.TracingOptions{
-		Program: syncObjs.syncPrograms.BpfProgKernHmapdelete,
-	})
-	if err != nil {
-		log.Fatalf("opening htab_map_delete_elem kprobe: %s", err)
-	}
-	defer hashMapDelete.Close()
+	// Start HTTP server for Prometheus metrics
+	handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
+	http.Handle("/metrics", handler)
+	go func() {
+		log.Fatal(http.ListenAndServe(":2112", nil))
+	}()
+	log.Println("Prometheus HTTP server started on :2112")
 
-	lruHashMapUpdate, err := link.AttachTracing(link.TracingOptions{
-                Program: syncObjs.syncPrograms.BpfProgKernLruhmapupdate,
-        })
-        if err != nil {
-                log.Fatalf("opening lru_htab_map_update_elem kprobe: %s", err)
-        }
-        defer lruHashMapUpdate.Close()
-
-        lruHashMapDelete, err := link.AttachTracing(link.TracingOptions{
-                Program: syncObjs.syncPrograms.BpfProgKernLruhmapdelete,
-        })
-        if err != nil {
-                log.Fatalf("opening lru_htab_map_delete_elem kprobe: %s", err)
-        }
-        defer lruHashMapDelete.Close()
-
-        arrayUpdate, err := link.AttachTracing(link.TracingOptions{
-                Program: syncObjs.syncPrograms.BpfProgKernArraymapupdate,
-        })
-        if err != nil {
-                log.Fatalf("opening array_map_update_elem kprobe: %s", err)
-        }
-        defer arrayUpdate.Close()
-
-        arrayDelete, err := link.AttachTracing(link.TracingOptions{
-                Program: syncObjs.syncPrograms.BpfProgKernArraymapdelete,
-        })
-        if err != nil {
-                log.Fatalf("opening array_map_delete_elem kprobe: %s", err)
-        }
-        defer arrayDelete.Close()
-
-	mapsIDs := make(map[string]*ebpf.Map)
-	mapsLengths := make(map[string]int)
-
-	// Append all maps we track into the array so we can loop through it
-	var maps []*ebpf.Map
-	maps = append(maps, syncObjs.syncMaps.ArrayMap, syncObjs.syncMaps.HashMap, syncObjs.syncMaps.LruHashMap)
-	for _, m := range maps {
-		info, err := m.Info()
-		if err != nil {
-		    log.Fatalf("Failed to get map info: %v", err)
-		}
-
-		mapID, opt := info.ID()
-		if !opt {
-		    log.Printf("Map %s doesn't not support ID() call", info.Name)
-		    continue
-		}
-		id := fmt.Sprintf("%d", mapID)
-		mapsIDs[id] = m
-		length, err := getMapKeysLen(m)
-		if err != nil {
-		    log.Fatalf("Failed to get keys for map %s: %v", id, err)
-		}
-
-		mapsLengths[id] = length
-            	mapItemCountGauge.WithLabelValues(id).Set(float64(length))
-	}
-
-	// Print the number of keys for each map for debugging
-	for name, l := range mapsLengths {
-		fmt.Printf("Map %s has %d keys\n", name, l)
-	}
-
-
-	rd, err := ringbuf.NewReader(syncObjs.MapEvents)
-	if err != nil {
-		panic(err)
-	}
-	defer rd.Close()
-
+	// Keep the program running.
 	for {
-		record, err := rd.Read()
+		time.Sleep(UPDATE_INTERVAL * time.Second)
+		reader, err := iterLink.Open()
 		if err != nil {
-			panic(err)
+			log.Fatalf("Failed to open BPF iterator: %v", err)
+		}
+		defer reader.Close()
+
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			// Variables to store the parsed values
+			var id int
+			var name string
+			var maxElements int
+			var currElements int64
+
+			// Parse the line
+			line := scanner.Text()
+			length, err := fmt.Sscanf(line, "%4d %s %10d %10d", &id, &name, &maxElements, &currElements)
+			if err != nil || length != 4 {
+				log.Fatal(err)
+			}
+
+			// Update the metrics
+			idStr := fmt.Sprintf("%d", id)
+			mapElemCountGauge.WithLabelValues(idStr, name).Set(float64(currElements))
+			mapPressureGauge.WithLabelValues(idStr, name).Set(float64(currElements) / float64(maxElements))
 		}
 
-		Event := (*MapData)(unsafe.Pointer(&record.RawSample[0]))
-		log.Printf("Map ID: %d", Event.MapID)
-		log.Printf("Name: %s", string(Event.Name[:]))
-		log.Printf("PID: %d", Event.PID)
-		log.Printf("Update Type: %s", Event.UpdateType.String())
-		log.Printf("Key: %d", Event.Key)
-		log.Printf("Key Size: %d", Event.KeySize)
-		log.Printf("Value: %d", Event.Value)
-		log.Printf("Value Size: %d", Event.ValueSize)
-		log.Printf("===========================================")
-
-		mapID := fmt.Sprintf("%d", Event.MapID)
-		m := mapsIDs[mapID]
-		
-		// Since the metrics of all other maps (then the one loaded by this program) would be wrong, we skip them
-		_, ok := mapsLengths[mapID]; if !ok {
-			continue
+		if err := scanner.Err(); err != nil {
+			log.Fatal(err)
 		}
-
-		length, err := getMapKeysLen(m); if err != nil {
-			log.Printf("Failed to get length of the map %s", mapID)
-			continue
-		}
-            	mapItemCountGauge.WithLabelValues(mapID).Set(float64(length))
 	}
 }
