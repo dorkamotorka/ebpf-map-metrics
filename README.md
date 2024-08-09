@@ -1,10 +1,12 @@
-# ebpf-map-metrics
+# eBPF Map Metrics Prometheus Exporter
 
 ## Development Status
 
 This project is currently under development.
 
 It requires `6.6+` Linux Kernel, due to `bpf_map_sum_elem_count` kfunc.
+
+![Infra-9](https://github.com/user-attachments/assets/de0a70c1-1fbb-498c-b3de-80c1d1c0bf7b)
 
 ## How to Run
 
