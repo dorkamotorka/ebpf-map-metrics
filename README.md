@@ -12,13 +12,22 @@ It requires `6.6+` Linux Kernel, due to `bpf_map_sum_elem_count` kfunc.
 
 To run the program, follow these steps:
 
+- First build and run the docker container with all the dependencies:
 ```
+docker buildx create --name mybuilder --bootstrap --use
+docker buildx build --push --platform linux/arm64,linux/amd64 --tag dorkamotorka/ubuntu-ebpf -f Dockerfile .
+docker run --rm -it -v ~/ebpf-map-metrics/src:/ebpf-map-metrics --privileged -h test --name test --env TERM=xterm-color dorkamotorka/ubuntu-ebpf
+```
+
+- Exec into the container:
+```
+cd ebpf-map-metrics
 go generate
 go build
 sudo ./map-exporter
 ```
 
-You can then test trigger actions on eBPF map using:
+- You can then test trigger actions on eBPF map using:
 
 ```
 sudo bpftool map
