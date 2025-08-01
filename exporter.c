@@ -22,6 +22,7 @@ int dump_bpf_map(struct bpf_iter__bpf_map *ctx) {
   switch (map->map_type) {
 	  /* all the fixed-size “array-like” maps */
 	  case BPF_MAP_TYPE_ARRAY:
+	  case BPF_MAP_TYPE_QUEUE:
 	  case BPF_MAP_TYPE_PERCPU_ARRAY:
 	  case BPF_MAP_TYPE_PROG_ARRAY:
 	  case BPF_MAP_TYPE_PERF_EVENT_ARRAY:
