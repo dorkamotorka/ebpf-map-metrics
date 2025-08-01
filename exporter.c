@@ -14,8 +14,32 @@ int dump_bpf_map(struct bpf_iter__bpf_map *ctx) {
     return 0;
   }
 
-  BPF_SEQ_PRINTF(seq, "%4u %-16s %10d %10lld\n", map->id, map->name,
-                 map->max_entries, bpf_map_sum_elem_count(map));
+  /* -------------------------------------------
+  * Figure out how many elements the map holds
+  * ------------------------------------------- */
+  s64 elem_cnt;
+
+  switch (map->map_type) {
+	  /* all the fixed-size “array-like” maps */
+	  case BPF_MAP_TYPE_ARRAY:
+	  case BPF_MAP_TYPE_PERCPU_ARRAY:
+	  case BPF_MAP_TYPE_PROG_ARRAY:
+	  case BPF_MAP_TYPE_PERF_EVENT_ARRAY:
+	  case BPF_MAP_TYPE_DEVMAP:
+	  case BPF_MAP_TYPE_DEVMAP_HASH:
+	  case BPF_MAP_TYPE_CPUMAP:
+		/* every slot exists from 0..max_entries-1 */
+		elem_cnt = map->max_entries;
+		break;
+
+	  default:
+		/* dynamically sized -> ask the helper */
+		elem_cnt = bpf_map_sum_elem_count(map);
+		break;
+  }
+
+  BPF_SEQ_PRINTF(seq, "%4u %-32s %10d %10lld\n", map->id, map->name,
+                 map->max_entries, elem_cnt);
 
   return 0;
 }
