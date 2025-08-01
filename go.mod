@@ -1,4 +1,4 @@
-module map
+module exporter 
 
 go 1.21
 

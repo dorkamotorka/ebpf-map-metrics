@@ -30,6 +30,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
+      - name: Build exporter
+        run: |
+          go generate
+          go build
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:

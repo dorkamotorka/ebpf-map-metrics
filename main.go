@@ -1,6 +1,6 @@
 package main
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go count count.c
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go exporter exporter.c
 
 import (
 	"bufio"
@@ -46,8 +46,8 @@ func main() {
 		log.Fatalf("Failed to remove memlock limit: %v", err)
 	}
 
-	objs := countObjects{}
-	if err := loadCountObjects(&objs, nil); err != nil {
+	objs := exporterObjects{}
+	if err := loadExporterObjects(&objs, nil); err != nil {
 		log.Fatalf("Failed to load objects: %v", err)
 	}
 	defer objs.Close()
