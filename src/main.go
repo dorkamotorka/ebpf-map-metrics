@@ -66,9 +66,9 @@ func main() {
 	handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
 	http.Handle("/metrics", handler)
 	go func() {
-		log.Fatal(http.ListenAndServe(":2112", nil))
+		log.Fatal(http.ListenAndServe(":9090", nil))
 	}()
-	log.Println("Prometheus HTTP server started on :2112")
+	log.Println("Prometheus HTTP server started on :9090")
 
 	// Keep the program running.
 	for {
