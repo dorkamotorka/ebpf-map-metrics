@@ -33,7 +33,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libelf-dev llvm clang
+          sudo apt-get install -y libbpf-dev libelf-dev llvm clang
 
       - name: Build exporter
         run: |
