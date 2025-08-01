@@ -19,14 +19,6 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libelf-dev llvm clang
-
-      - name: Run Make
-        run: make
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
